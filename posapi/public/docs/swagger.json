@@ -1,0 +1,157 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "title": "Test API",
+        "description": "REST API",
+        "termsOfService": "terms",
+        "license": {
+            "name": "proprietary"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8081",
+    "basePath": "",
+    "schemes": [
+        "http"
+    ],
+    "consumes": [
+        "application/json"
+    ],
+    "paths": {
+        "/registration": {
+            "post": {
+                "tags": [
+                    "registration"
+                ],
+                "summary": "User registration api",
+                "operationId": "getRegistration",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "parameters": [
+                    {
+                        "name": "firstName",
+                        "in": "formData",
+                        "description": "user first name",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "lastName",
+                        "in": "formData",
+                        "description": "user last name",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "email",
+                        "in": "formData",
+                        "description": "user email",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "password",
+                        "in": "formData",
+                        "description": "password",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{\"error\":false,\"message\":\"Registration successfully.\"}"
+                    },
+                    "403": {
+                        "description": "{\"error\":true,\"message\":\"Required field(s) password is missing or empty\"}"
+                    }
+                }
+            }
+        },
+        "/login": {
+            "post": {
+                "tags": [
+                    "login"
+                ],
+                "summary": "User login api",
+                "operationId": "getLogin",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "formData",
+                        "description": "user email",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "password",
+                        "in": "formData",
+                        "description": "password",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{\"token\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9eyJpYXQi...........\"}"
+                    },
+                    "403": {
+                        "description": "{\"error\":true,\"message\":\"Password do not match our records.\"}"
+                    }
+                }
+            }
+        },
+        "/api/demo": {
+            "post": {
+                "tags": [
+                    "demo"
+                ],
+                "summary": "Demo API",
+                "operationId": "getDemo",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "parameters": [
+                    {
+                        "name": "param1",
+                        "in": "formData",
+                        "description": "Parameter 1",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "param2",
+                        "in": "formData",
+                        "description": "Parameter 2",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{\"token\": \"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9eyJpYXQi...........\"}"
+                    },
+                    "403": {
+                        "description": "{\"error\":true,\"message\":\"Password do not match our records.\"}"
+                    }
+                },
+                "security": [
+                    {
+                        "MyHeaderAuthentication": []
+                    }
+                ]
+            }
+        }
+    },
+    "definitions": {},
+    "securityDefinitions": {
+        "MyHeaderAuthentication": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

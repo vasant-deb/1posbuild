@@ -1,0 +1,11 @@
+[22-Sep-2023 03:33:08 UTC] PHP Notice:  Array to string conversion in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 336
+[22-Sep-2023 03:33:43 UTC] PHP Notice:  Array to string conversion in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 336
+[30-Sep-2023 00:13:47 UTC] PHP Notice:  Undefined index: finaldiscount in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 411
+[30-Sep-2023 00:13:47 UTC] PHP Notice:  Undefined index: finalhst in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 412
+[30-Sep-2023 00:13:47 UTC] PHP Notice:  Undefined index: finalsub in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 413
+[30-Sep-2023 00:18:26 UTC] PHP Notice:  Undefined index: finaldiscount in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 411
+[30-Sep-2023 00:18:26 UTC] PHP Notice:  Undefined index: finalhst in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 412
+[30-Sep-2023 00:18:26 UTC] PHP Notice:  Undefined index: finalsub in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 413
+[30-Sep-2023 00:22:41 UTC] PHP Notice:  Undefined index: finaldiscount in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 411
+[30-Sep-2023 00:22:41 UTC] PHP Notice:  Undefined index: finalhst in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 412
+[30-Sep-2023 00:22:41 UTC] PHP Notice:  Undefined index: finalsub in /home/nkbsatak/pwa.onlinebilling.ca/src/routes.php on line 413
