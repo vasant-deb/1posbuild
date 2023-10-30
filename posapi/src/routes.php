@@ -1,4 +1,5 @@
 <?php
+
 use Slim\Http\Request;
 use Slim\Http\Response;
 use Slim\Http\UploadedFile;
@@ -15,28 +16,40 @@ require ("mailtemplate.php");
 date_default_timezone_set('America/Toronto');
 
 
-$app->get('/', function (Request $request, Response $response, array $args)
-{
-    try
-    {
-        return $this
-            ->response
-            ->withJson(['error' => false, 'message' => "APIs are working... Yipee"]);
-    }
-    catch(PDOException $e)
-    {
-        return $this
-            ->response
-            ->withJson(['error' => true, 'message' => $e->getMessage() ]);
-    }
-    catch(Exception $e)
-    {
-        return $this
-            ->response
-            ->withJson(['error' => true, 'message' => $e->getMessage() ]);
-    }
+$app->get('/', function (Request $request, Response $response, array $args) {
+    try {
+        // Specify the correct printer name
 
+        return $response->withJson(['error' => false, 'message' => 'Printed successfully']);
+    } catch (\Exception $e) {
+        // Log or print the error message to identify issues
+        error_log("Printing error: " . $e->getMessage());
+
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()]);
+    }
 });
+
+$app->get('/print', function ($request, $response, $args) {
+    $htmlContent = '<html><body><h1>Hello, World!</h1></body></html>';
+
+    echo "<html><body>$htmlContent</body></html>";
+
+    echo '<script type="text/javascript">
+        function printPage() {
+            var printWindow = window.open("", "Print", "width=600,height=600");
+            printWindow.document.open();
+            printWindow.document.write(\'<html><body>' . $htmlContent . '</body></html>\');
+            printWindow.document.close();
+            printWindow.print();
+            printWindow.close();
+        }
+
+        window.onload = printPage;
+    </script>';
+
+    return $response->write($htmlContent);
+});
+
 
 $app->get('/getuser', function (Request $request, Response $response, array $args)
 {
@@ -138,9 +151,9 @@ $app->get('/getservicereceipt', function (Request $request, Response $response, 
        $currentDate = date('Y-m-d');
 
          
-        $sql = "SELECT * from orders where DATE(created_at) = :currentDate and status='Pay Later' order by id DESC";
+        $sql = "SELECT * from orders inner join order_items on orders.id=order_items.order_id where orders.type='product' && order_items.product_id='0' order by orders.id DESC";
 $stmt = $this->db->prepare($sql);
-$stmt->bindParam(':currentDate', $currentDate);
+
 $stmt->execute();
 $orders = $stmt->fetchAll();	
 		//select category_name as 'Others',product_id,quantity,subtotal from order_items where product_id=0 and date(created)='2023-10-13'
@@ -575,7 +588,7 @@ $app->post('/addphone', function (Request $request, Response $response, array $a
         $insertStmt->bindParam(':notes', $phone_notes);
         $insertStmt->execute();
 		 }else{
-			 $insertSql = "UPDATE phones set status='1' where imei=:imei;";
+			 $insertSql = "UPDATE phones set status='1' and where imei=:imei;";
         $insertStmt = $pdo->prepare($insertSql);
         $insertStmt->bindParam(':imei', $phone_imei);
         $insertStmt->execute();
@@ -629,7 +642,7 @@ $receiptData['items'] = $itemsx;
 
         // ...
 
-        return $response->withJson(['error' => false, 'message' => 'Order placed successfully.', 'order_id' => $lastInsertOrderId, 'receipt' => $receiptData]);
+        return $response->withJson(['error' => false, 'message' => 'Order placed successfully.', 'order_id' => $lastInsertOrderId, 'receipt' => $receiptData,'type'=>'Phone']);
 
     } catch (PDOException $e) {
         return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500); // Internal Server Error
@@ -1562,7 +1575,7 @@ $orderItems = $orderItemsStmt->fetchAll();
       foreach ($orderItems as $orderItem) {
     $productId = $orderItem['product_id'];
     $orderedQuantity = $orderItem['quantity'];
-
+if($orderItem['product_id']!=="0"){
     // Fetch the current stock of the product
     $sql = "SELECT product_stock FROM products WHERE id = :productId";
     $stockStmt = $this->db->prepare($sql);
@@ -1580,6 +1593,8 @@ $orderItems = $orderItemsStmt->fetchAll();
     $updateStockStmt->bindParam(':productId', $productId);
     $updateStockStmt->execute();
 }
+	
+}
         }
 		
 		
@@ -1587,9 +1602,9 @@ $orderItems = $orderItemsStmt->fetchAll();
 		
 		
 		
-$sql = "SELECT o.orderId AS order_id,o.changeamount,o.totalItems,o.created_at AS order_date,o.userid AS user_id,o.customerid AS customer_id,o.status AS order_status,o.card AS card_payment,
+$sql = "SELECT o.orderId AS order_id,o.changeamount,o.type,o.totalItems,o.created_at AS order_date,o.userid AS user_id,o.customerid AS customer_id,o.status AS order_status,o.card AS card_payment,
         o.cash AS cash_payment,o.discount AS order_discount,o.pointsRedeem AS points_redeem,o.due AS due_amount,o.subtotal AS subtotal_amount,o.tax AS tax_amount,
-        o.total AS total_amount,oi.name AS product_name,oi.quantity AS quantity,oi.price AS unit_price,oi.subtotal AS line_total FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id
+        o.total AS total_amount,oi.product_id as prodid,oi.name AS product_name,oi.quantity AS quantity,oi.price AS unit_price,oi.subtotal AS line_total FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id
     WHERE o.id = :orderId OR o.orderId=:orderId";		
 $orderStmt = $this->db->prepare($sql);
 $orderStmt->bindParam(':orderId', $orderId);
@@ -1622,7 +1637,16 @@ $receiptData = [
 
 
 $itemsx = [];
+$type='Product';
 foreach ($allorderData as $row) {
+	
+	if($row['prodid']=="0" && $row['type']=="product"){
+		$type='Service';
+	}
+	if($row['type']!="product"){
+		$type='Phone';
+	}
+	
     $itemsx[] = [
         'product_name' => $row['product_name'],
         'quantity' => $row['quantity'],
@@ -1632,7 +1656,11 @@ foreach ($allorderData as $row) {
 }
 $receiptData['items'] = $itemsx;
 
-return $response->withJson(['error' => false, 'message' => 'Order placed successfully.', 'order_id' => $orderId, 'receipt' => $receiptData]);
+
+
+
+
+return $response->withJson(['error' => false, 'message' => 'Order placed successfully.', 'order_id' => $orderId, 'receipt' => $receiptData,'type'=>$type]);
 
 		
     } catch (PDOException $e) {
@@ -2191,7 +2219,7 @@ $app->get('/get-general-settings', function (Request $request, Response $respons
         $pdo = $this->db; // Assuming you've set up your database connection
 
         // Query to retrieve general settings
-        $sql = "SELECT storename, storenumber, address, city, state, postalcode, phone,email, timing1, timing2, timing3, repairfooter, salefooter, phonefooter FROM settings";
+        $sql = "SELECT storename, storenumber,printername, address, city, state, postalcode, phone,email, timing1, timing2, timing3, repairfooter, salefooter, phonefooter FROM settings";
         $stmt = $pdo->query($sql);
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -2228,6 +2256,7 @@ $app->post('/update-general-settings', function (Request $request, Response $res
                 repairfooter = :repairfooter,
                 salefooter = :salefooter,
                 phonefooter = :phonefooter,
+				printername = :printername,
 				modified=NOW()";
 
         $stmt = $pdo->prepare($sql);
@@ -2246,6 +2275,7 @@ $app->post('/update-general-settings', function (Request $request, Response $res
         $stmt->bindParam(':repairfooter', $generalSettings['repairfooter']);
         $stmt->bindParam(':salefooter', $generalSettings['salefooter']);
         $stmt->bindParam(':phonefooter', $generalSettings['phonefooter']);
+		$stmt->bindParam(':printername', $generalSettings['printername']);
 
         $stmt->execute();
 
@@ -2338,7 +2368,84 @@ INNER JOIN categories ON categories.id = products.category_id where products.act
         return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
     }
 });
+//getreceipt
+$app->post('/getonereceipt', function (Request $request, Response $response, array $args) {
+    try {
+        $pdo = $this->db; // Assuming you've set up your database connection
 
+        // Retrieve category data from the request body
+        $data = $request->getParsedBody();
+		if($data['id']!==""){
+		
+$sql = "SELECT o.orderId AS order_id,o.changeamount,o.type,o.totalItems,o.created_at AS order_date,o.userid AS user_id,o.customerid AS customer_id,o.status AS order_status,o.card AS card_payment,
+        o.cash AS cash_payment,o.discount AS order_discount,o.pointsRedeem AS points_redeem,o.due AS due_amount,o.subtotal AS subtotal_amount,o.tax AS tax_amount,
+        o.total AS total_amount,oi.product_id as prodid,oi.name AS product_name,oi.quantity AS quantity,oi.price AS unit_price,oi.subtotal AS line_total FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id
+    WHERE o.id = :orderId OR o.orderId=:orderId";		
+$orderStmt = $this->db->prepare($sql);
+$orderStmt->bindParam(':orderId', $data['id']);
+$orderStmt->execute();
+
+$allorderData = $orderStmt->fetchAll();
+
+// Initialize the $orderData with the first row, if available
+$orderData = reset($allorderData);
+
+// Construct the receipt data in the desired format
+$receiptData = [
+    'order_id' => $orderData['order_id'] ?? null,
+    'order_date' => $orderData['order_date'] ?? null,
+    'user_id' => $orderData['user_id'] ?? null,
+    'customer_id' => $orderData['customer_id'] ?? null,
+    'order_status' => $orderData['order_status'] ?? null,
+    'card_payment' => $orderData['card_payment'] ?? null,
+    'cash_payment' => $orderData['cash_payment'] ?? null,
+    'order_discount' => $orderData['order_discount'] ?? null,
+    'points_redeem' => $orderData['points_redeem'] ?? null,
+    'due_amount' => $orderData['due_amount'] ?? null,
+    'subtotal_amount' => $orderData['subtotal_amount'] ?? null,
+    'tax_amount' => $orderData['tax_amount'] ?? null,
+    'total_amount' => $orderData['total_amount'] ?? null,
+    'change_amount' => $orderData['changeamount'] ?? null,
+    'totalItems' => $orderData['totalItems'] ?? null,
+    'items' => [],
+];
+
+
+$itemsx = [];
+$type='Product';
+foreach ($allorderData as $row) {
+	
+	if($row['prodid']=="0" && $row['type']=="product"){
+		$type='Service';
+	}
+	if($row['type']!="product"){
+		$type='Phone';
+	}
+	
+    $itemsx[] = [
+        'product_name' => $row['product_name'],
+        'quantity' => $row['quantity'],
+        'unit_price' => $row['unit_price'],
+        'line_total' => $row['line_total'],
+    ];
+}
+$receiptData['items'] = $itemsx;
+
+        // ...
+
+        return $response->withJson(['error' => false, 'message' => 'Order placed successfully.', 'order_id' => $data['id'], 'receipt' => $receiptData,'type'=>$type]);
+return $response->withJson(['message' => 'Category added successfully']);
+		}else{
+		return $response->withJson(['error' => false, 'message' => 'Empty or Invalid Order Id']);
+
+		}
+    } catch (PDOException $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    } catch (Exception $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    }
+});
+//end receipt
 // Add a new category
 $app->post('/supercategories', function (Request $request, Response $response, array $args) {
     try {
@@ -2369,12 +2476,13 @@ $app->post('/supercategories', function (Request $request, Response $response, a
 
         // Increment the last order value by 1
         $newOrder = $lastOrder + 1;
-
+		$activ='1';
         // Insert the new category into the database with the incremented order
-        $sql = "INSERT INTO categories (name, categoryOrder, created_at) VALUES (:name, :categoryOrder, NOW())";
+        $sql = "INSERT INTO categories (name, categoryOrder,active, created_at) VALUES (:name, :categoryOrder,:active, NOW())";
         $stmt = $pdo->prepare($sql);
         $stmt->bindParam(':name', $data['name']);
         $stmt->bindParam(':categoryOrder', $newOrder); // Use the incremented order value
+		  $stmt->bindParam(':active', $activ);
         $stmt->execute();
 
         return $response->withJson(['message' => 'Category added successfully']);
@@ -2386,6 +2494,59 @@ $app->post('/supercategories', function (Request $request, Response $response, a
     }
 });
 
+$app->post('/addrewards', function ($request, $response, $args) {
+    try {
+        $pdo = $this->db; // Assuming you've set up your database connection
+
+        // Retrieve reward data from the request body
+        $data = $request->getParsedBody();
+
+        $userid = $data['userid'];
+        $customerid = $data['customerid'];
+        $orderid = $data['orderid'];
+        $reason = $data['reason'];
+        $points = $data['points'];
+
+        // Add your validation logic here if needed
+
+        // Insert the reward into the database
+        $sql = "INSERT INTO rewards (userid, customerid, orderid, reason, points, created) VALUES (:userid, :customerid, :orderid, :reason, :points, NOW())";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':userid', $userid);
+        $stmt->bindParam(':customerid', $customerid);
+        $stmt->bindParam(':orderid', $orderid);
+        $stmt->bindParam(':reason', $reason);
+        $stmt->bindParam(':points', $points);
+
+        if ($stmt->execute()) {
+			
+			
+		$getPointsSql = "SELECT points FROM customers WHERE id = :customerid";
+        $getPointsStmt = $pdo->prepare($getPointsSql);
+        $getPointsStmt->bindParam(':customerid', $customerid);
+        $getPointsStmt->execute();
+        $currentPoints = $getPointsStmt->fetch();
+		$currentPoints=$currentPoints['points'];
+
+        // Calculate the updated points
+        $newPoints = $currentPoints + $points;
+
+        // Update the customer's points
+        $updatePointsSql = "UPDATE customers SET points = :newPoints WHERE id = :customerid";
+        $updatePointsStmt = $pdo->prepare($updatePointsSql);
+        $updatePointsStmt->bindParam(':newPoints', $newPoints);
+        $updatePointsStmt->bindParam(':customerid', $customerid);
+	    $updatePointsStmt->execute();
+            return $response->withJson(['error' => false, 'message' => 'Reward added successfully. Total Points '.$newPoints]);
+        } else {
+            return $response->withJson(['error' => true, 'message' => 'Error adding reward']);
+        }
+    } catch (PDOException $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    } catch (Exception $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    }
+});
 
 $app->post('/superproducts', function (Request $request, Response $response, array $args) {
     try {
