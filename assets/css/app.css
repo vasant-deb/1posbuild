@@ -399,7 +399,7 @@ body input, body h1, body h3, body a, body span {
 #app #weather-section .menu-section-content .day-card .day-card-content {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 20px);
+  height: calc(100%);
   justify-content: space-evenly;
   padding: 10px;
 }
