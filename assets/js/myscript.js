@@ -27,3 +27,11 @@ if ('serviceWorker' in navigator && 'PushManager' in window) {
     }
     });
 }
+
+function myFunction() {
+    if (window) {
+      window.minimize(); // Attempting to minimize the window
+    } else {
+      console.error('Window object not accessible.');
+    }
+}

@@ -5,29 +5,136 @@ use Slim\Http\Response;
 use Slim\Http\UploadedFile;
 use League\Csv\Reader;
 use League\Csv\Writer;
+require '../vendor/mike42/escpos-php/autoload.php';
+use Mike42\Escpos\PrintConnectors\FilePrintConnector;
+
+use Mike42\Escpos\Printer;
 
 require '../vendor/league/csv/autoload.php';
+
 
 $container = $app->getContainer();
 $container['upload_directory'] = '..' . __DIR__ . '/uploads';
 
 require (__DIR__ . "/../phpmailer/class.phpmailer.php");
 require ("mailtemplate.php");
+
+
 date_default_timezone_set('America/Toronto');
 
 
+$app->get('/printfinal', function (Request $request, Response $response, array $args) {
+$printerName = 'USB002'; // Replace with the actual local port name of your USB printer
+
+try {
+  /*  // $connector = 'Receipt';
+//--    $connector = new WindowsPrintConnector("Receipt");
+
+    /* Print a "Hello world" receipt" */
+//--    $printer = new Printer($connector);
+ //--   $printer -> text("Hello World!\n");
+ //--   $printer -> cut();
+    
+    /* Close printer */
+ //--   $printer -> close();
+
+
+	$imagePath='receipt.png';
+    $connector = new WindowsPrintConnector("Receipt");
+
+  
+        $printer = new Printer($connector);
+
+        // Load the image
+        $img = EscposImage::load($imagePath);
+
+        // Print the image
+        $printer->graphics($img);
+
+        // Cut the paper (if your printer supports it)
+        $printer->cut();
+
+        // Close the printer connection
+        $printer->close();
+
+        return "Printing completed.";
+
+
+echo 'sucess';
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+});
+
+
+
 $app->get('/', function (Request $request, Response $response, array $args) {
+   try {
+	
+	
+   echo 'Working';
+	
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+});
+
+$app->get('/updateordersync', function (Request $request, Response $response, array $args) {
     try {
-        // Specify the correct printer name
+        // Initialize your database connection
+        // You should define your database connection settings here
 
-        return $response->withJson(['error' => false, 'message' => 'Printed successfully']);
-    } catch (\Exception $e) {
-        // Log or print the error message to identify issues
-        error_log("Printing error: " . $e->getMessage());
+        // Update the 'sync' field in the 'orders' table where 'sync' is equal to 0
+        // Replace the placeholders with actual table and column names
+        $query = "UPDATE orders SET sync = 1 WHERE sync = 0";
+      $stmt = $this->db->prepare($query);
 
-        return $response->withJson(['error' => true, 'message' => $e->getMessage()]);
+		$stmt->execute();
+        return "";
+    } catch (Exception $e) {
+        // Handle any exceptions and return an error response
+        $response = $response->withHeader('Content-Type', 'application/json');
+        $response->getBody()->write(json_encode(['error' => true, 'message' => $e->getMessage()]));
+        return $response;
     }
 });
+
+
+$app->get('/updateserverx', function (Request $request, Response $response, array $args) {
+    try {
+      
+        
+        // Initialize your database connection
+        // Select data from the orders and order_items tables
+        $query = "SELECT orders.id as oid,orders.userid,orders.customerid,orders.orderId as ono,orders.modeOfPayment
+		,orders.card,orders.giftcard,orders.cash,orders.discount,orders.pointsRedeem,orders.totalItems,orders.subtotal as osubtotal,
+		orders.tax,orders.total as ototal,orders.due,orders.changeamount,orders.status,orders.dispute,orders.type,orders.notes,
+		orders.sync,orders.created_at,order_items.id as oiid,order_items.order_id,
+		order_items.product_id,order_items.product_type,order_items.name,order_items.quantity,order_items.price,
+		order_items.subtotal,order_items.created FROM orders INNER JOIN order_items ON orders.id = order_items.order_id WHERE orders.sync = 0";
+
+        $stmt = $this->db->query($query);
+        $result = $stmt->fetchAll();
+		$count=count($result);
+		$jsonArray='';
+        // Perform any data processing here if needed
+		if($count>0){
+        // Convert the result to a JSON array
+        $jsonArray = json_encode($result);
+		}
+        // Send an HTTP POST request to update the server
+       
+
+        return $jsonArray;
+    } catch (Exception $e) {
+        $response = $response->withHeader('Content-Type', 'application/json');
+        $response->getBody()->write(json_encode(['error' => true, 'message' => $e->getMessage()]));
+        return $response;
+    }
+});
+
+
+
 
 $app->get('/print', function ($request, $response, $args) {
     $htmlContent = '<html><body><h1>Hello, World!</h1></body></html>';
@@ -241,8 +348,8 @@ $sql = "SELECT
 	
 	
 	(SELECT SUM(amount) FROM refunds WHERE DATE(created) = :currentDate) AS total_refund,
-    (SELECT SUM(total) FROM orders WHERE status = 'Complete' AND DATE(created_at) = :currentDate) AS today_total,
-    (SELECT COUNT(id) FROM orders WHERE status = 'Complete' AND DATE(created_at) = :currentDate) AS total_orders,
+    (SELECT SUM(orders.total-orders.due) FROM orders WHERE DATE(created_at) = :currentDate) AS today_total,
+    (SELECT COUNT(id) FROM orders WHERE DATE(created_at) = :currentDate) AS total_orders,
     (SELECT COUNT(id) FROM customers WHERE DATE(created_at) = :currentDate) AS new_customers_today,
     (SELECT COUNT(id) FROM customers) AS total_customers";
 $stmt = $this->db->prepare($sql);
@@ -332,7 +439,7 @@ $app->get('/getusers', function (Request $request, Response $response, array $ar
 {
     try
     {
-        $sql = "SELECT * FROM users";
+        $sql = "SELECT id,username,userid FROM users";
         $stmt = $this->db->prepare($sql);
     
         $stmt->execute();
@@ -436,8 +543,17 @@ $app->post('/refund', function (Request $request, Response $response, array $arg
         $updateStmt->bindParam(':orderId', $orderId);
         $updateStmt->bindParam(':orderNumber', $orderNumber);
         $updateStmt->execute();
+		//get order details
+		$odq = "SELECT * FROM refunds WHERE orderId = :orderId AND orderNumber = :orderNumber";
+		$dq = $pdo->prepare($odq);
+		$dq->bindParam(':orderId', $orderId);
+		$dq->bindParam(':orderNumber', $orderNumber);
+		$dq->execute();
+		$dr = $dq->fetch();
+			
+		//end order details
 
-        return $response->withJson(['error' => false, 'message' => 'Refund success']);
+        return $response->withJson(['error' => false, 'message' => 'Refund success','orderdata'=>$dr]);
     } catch (PDOException $e) {
         return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500); // Internal Server Error
     }
@@ -587,6 +703,28 @@ $app->post('/addphone', function (Request $request, Response $response, array $a
         $insertStmt->bindParam(':status', $status);
         $insertStmt->bindParam(':notes', $phone_notes);
         $insertStmt->execute();
+		
+		
+		$catid='5';		
+		$name=$cartProductName;
+		$image='no-image.jpg';
+		$price=$phone_price + 100;
+		$product_stock=1;
+		$active=1;
+		$insertSql = "INSERT INTO products (category_id,name, image, price, product_stock, active)
+            VALUES (:category_id,:name, :image, :price, :product_stock, :active)";
+        $insertStmt = $pdo->prepare($insertSql);
+		  $insertStmt->bindParam(':category_id', $catid);
+        $insertStmt->bindParam(':name', $name);
+        $insertStmt->bindParam(':image', $image);
+        $insertStmt->bindParam(':price', $price);
+        $insertStmt->bindParam(':product_stock', $product_stock);
+        $insertStmt->bindParam(':active', $active);
+
+        $insertStmt->execute();
+		
+		
+		
 		 }else{
 			 $insertSql = "UPDATE phones set status='1' and where imei=:imei;";
         $insertStmt = $pdo->prepare($insertSql);
@@ -641,7 +779,7 @@ foreach ($allorderData as $row) {
 $receiptData['items'] = $itemsx;
 
         // ...
-
+		
         return $response->withJson(['error' => false, 'message' => 'Order placed successfully.', 'order_id' => $lastInsertOrderId, 'receipt' => $receiptData,'type'=>'Phone']);
 
     } catch (PDOException $e) {
@@ -695,6 +833,7 @@ $app->get('/updateserver', function (Request $request, Response $response) {
 
 
 
+
 $app->post('/getorder', function (Request $request, Response $response, array $args) {
 
     // Get the form data from the request body
@@ -730,7 +869,7 @@ $app->post('/checkauth', function (Request $request, Response $response, array $
 
     // Get the form data from the request body
     $formData = $request->getParsedBody();
-
+	date_default_timezone_set('America/Toronto');
     // Validate the form data (you can add more robust validation here)
     if (empty($formData['userid']) || empty($formData['token']) || empty($formData['username'])) {
         return $response->withJson(['error' => true, 'message' => 'Please provide both userid and password.'], 400); // Bad Request
@@ -761,10 +900,21 @@ $app->post('/checkauth', function (Request $request, Response $response, array $
             $stmt->execute();
             $clockInEntry = $stmt->fetch();
             
+			
+			
+			$sql = "SELECT SUM(orders.total) / count(orders.id) AS avg_total,SUM(orders.total) as sales FROM orders WHERE status = 'Complete' AND type = 'product' 
+			AND DATE(created_at) = CURDATE()";
+			$stmt = $this->db->prepare($sql);
+           
+            $stmt->execute();
+            $re = $stmt->fetch();
+			$avg=$re['avg_total'];
+			$sales=$re['sales'];
+			
             if ($clockInEntry !== false) {
-                return $response->withJson(['error' => false, 'message' => 'Login successful', 'token' => $user['token'], 'clockin' => true,'date'=>date_default_timezone_get()]);
+                return $response->withJson(['error' => false, 'message' => 'Login successful', 'avg' => $avg,'sales'=>$sales, 'token' => $user['token'], 'clockin' => true,'date'=>date_default_timezone_get()]);
             } else {
-                return $response->withJson(['error' => false, 'message' => 'Login successful', 'token' => $user['token'], 'clockin' => false,'date'=>date_default_timezone_get()]);
+                return $response->withJson(['error' => false, 'message' => 'Login successful', 'avg' => $avg,'sales'=>$sales, 'token' => $user['token'], 'clockin' => false,'date'=>date_default_timezone_get()]);
             }
 		   
 		   
@@ -966,7 +1116,7 @@ $app->get('/products/search', function (Request $request, Response $response, ar
 
     // Perform the search in your database
     // Replace 'yourDatabaseTable' with the actual name of your products table
-    $sql = "SELECT * FROM products WHERE upc LIKE :searchTerm OR name LIKE :searchTerm";
+    $sql = "SELECT * FROM products WHERE upc LIKE :searchTerm OR name LIKE :searchTerm and products.product_stock>0";
     
     // Bind the search term to the SQL query
     $searchTermWildcard = '%' . $searchTerm . '%'; // Create a new variable to store the wildcard search term
@@ -1354,7 +1504,8 @@ $app->post('/manualcheckout', function (Request $request, Response $response, ar
         $ftotal = $formData['finaltotal'];
         $fcustomerid = $formData['customerid'];
         $userid = $formData['userid'];       
-		$changeamount = $formData['changeamount'];       
+		$changeamount = $formData['changeamount'];  
+		$notes = $formData['notes'];   		
 
         $payments = json_decode($formData['payments'], true); // Decode JSON 
         $jsonPayments = json_encode($payments);
@@ -1365,7 +1516,7 @@ $app->post('/manualcheckout', function (Request $request, Response $response, ar
 
 if ($formData['ordernumber']!="") {
     // Fetch the existing payment data and modeOfPayment from the order
-    $sql = "SELECT card, cash, giftcard, pointsRedeem, due,changeamount, modeOfPayment FROM orders WHERE orderId = :ordernumber";
+    $sql = "SELECT notes,card, cash, giftcard, pointsRedeem, due,changeamount, modeOfPayment FROM orders WHERE orderId = :ordernumber";
     $dueStmt = $this->db->prepare($sql);
     $dueStmt->bindParam(':ordernumber', $formData['ordernumber']);
     $dueStmt->execute();
@@ -1373,7 +1524,10 @@ if ($formData['ordernumber']!="") {
 
     // Combine the existing modeOfPayment and new payments into an array
 
-	
+	$oldnotes=$existingPaymentData['notes'];
+	if($notes==""){
+		$notes = $oldnotes;
+	}
 	
 	$existingPayments = [];
 
@@ -1430,14 +1584,15 @@ $giftcard = $existingPaymentData['giftcard'];
         }
     }
 	
-$orderId=$formData['ordernumber'];
+	$orderId=$formData['ordernumber'];
     // Your existing code for updating the order
-    $sql = "UPDATE orders SET userid = :userid, customerid = :customerid,changeamount=:changeamount, modeOfPayment = :mode, card = :card, cash = :cash, giftcard = :giftcard, discount = :discount, pointsRedeem = :pointsRedeem, status = :status, due = :due WHERE orderId = :orderId";
+    $sql = "UPDATE orders SET notes = :notes, userid = :userid, customerid = :customerid,changeamount=:changeamount, modeOfPayment = :mode, card = :card, cash = :cash, giftcard = :giftcard, discount = :discount, pointsRedeem = :pointsRedeem, status = :status, due = :due WHERE orderId = :orderId";
 
     $orderStmt = $this->db->prepare($sql);
+	$orderStmt->bindParam(':notes', $notes);
     $orderStmt->bindParam(':userid', $userid);
     $orderStmt->bindParam(':customerid', $fcustomerid);
-	 $orderStmt->bindParam(':changeamount', $changeamount);
+	$orderStmt->bindParam(':changeamount', $changeamount);
     $orderStmt->bindParam(':mode', $jsonPayments);
     $orderStmt->bindParam(':card', $card);
     $orderStmt->bindParam(':cash', $cash);
@@ -1514,10 +1669,11 @@ $cartItems = $stmt->fetchAll();
         
         
         // Insert the order into the 'orders' table
-        $orderInsertSql = "INSERT INTO orders (userid,changeamount,customerid, orderId, totalItems, subtotal, tax, total,modeOfPayment,card,cash,giftcard,discount,pointsRedeem,status,due)
-                            VALUES (:userid,:changeamount, :customerid,:orderId, :totalItems, :subtotal, :tax, :total,:mode,:card,:cash,:giftcard,:discount,:pointsRedeem,:status,:due)";
+        $orderInsertSql = "INSERT INTO orders (userid,notes,changeamount,customerid, orderId, totalItems, subtotal, tax, total,modeOfPayment,card,cash,giftcard,discount,pointsRedeem,status,due)
+                            VALUES (:userid,:notes,:changeamount, :customerid,:orderId, :totalItems, :subtotal, :tax, :total,:mode,:card,:cash,:giftcard,:discount,:pointsRedeem,:status,:due)";
         $orderStmt = $this->db->prepare($orderInsertSql);
         $orderStmt->bindParam(':userid', $userid);
+		$orderStmt->bindParam(':notes',$notes);
 		 $orderStmt->bindParam(':changeamount', $changeamount);
          $orderStmt->bindParam(':customerid', $fcustomerid);
         $orderStmt->bindParam(':orderId', $newOrderNumber);
@@ -2042,7 +2198,7 @@ $app->get('/categories-and-products', function (Request $request, Response $resp
     try {
         $userid = $request->getQueryParam('userid');
         
-        $sql = "SELECT categories.id, categories.name, products.id AS product_id, products.image, products.name AS product_name, products.price, products.category_id FROM categories INNER JOIN products on categories.id=products.category_id where products.active='1' and categories.active='1';";
+        $sql = "SELECT products.product_stock,categories.id, categories.name, products.id AS product_id, products.image, products.name AS product_name, products.price, products.category_id FROM categories INNER JOIN products on categories.id=products.category_id where products.active='1' and products.product_stock > 0 or (categories.id=5)";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $rows = $stmt->fetchAll();
@@ -2060,7 +2216,7 @@ $app->get('/categories-and-products', function (Request $request, Response $resp
                     'name' => $row['name'],
                 ];
             }
-
+if($row['product_stock'] > 0){
             // Add the product to the products array
             $products[] = [
                 'product_id' => $row['product_id'],
@@ -2068,7 +2224,10 @@ $app->get('/categories-and-products', function (Request $request, Response $resp
                 'product_name' => $row['product_name'],
                 'price' => $row['price'],
                 'category_id' => $row['category_id'],
+				'product_stock' => $row['product_stock'],
             ];
+			
+}
         }
 
         // Fetch the user's cart items
@@ -2305,6 +2464,38 @@ $app->get('/supercategories', function (Request $request, Response $response, ar
         return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
     }
 });
+$app->get('/superusers', function (Request $request, Response $response, array $args) {
+    try {
+        $token = $request->getQueryParam('token');
+        $pdo = $this->db; // Assuming you've set up your database connection
+
+        // Check if the token exists in the users table
+        $sqlTokenCheck = "SELECT * FROM users WHERE token = :token";
+        $stmtTokenCheck = $pdo->prepare($sqlTokenCheck);
+        $stmtTokenCheck->bindParam(':token', $token);
+        $stmtTokenCheck->execute();
+
+        $user = $stmtTokenCheck->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            return $response->withJson(['error' => true, 'message' => 'Invalid authentication token'], 401);
+        }
+
+        // Continue with the route logic here
+
+        // Query to retrieve all users
+        $sql = "SELECT * FROM users";
+        $stmt = $pdo->query($sql);
+        $users = $stmt->fetchAll();
+
+        return $response->withJson(['error' => false, 'users' => $users]);
+
+    } catch (PDOException $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    } catch (Exception $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    }
+});
 $app->get('/getsupercustomers', function (Request $request, Response $response, array $args)
 {
     try
@@ -2494,6 +2685,116 @@ $app->post('/supercategories', function (Request $request, Response $response, a
     }
 });
 
+$app->post('/superusers', function (Request $request, Response $response, array $args) {
+    try {
+        $pdo = $this->db; // Assuming you've set up your database connection
+
+        // Retrieve category data from the request body
+        $data = $request->getParsedBody();
+		if($data['id']!==""){
+			
+		$sql = "UPDATE users set username=:username, password=:password, user_password=:user_password,token=:token,role=:role where id=:id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':username', $data['username']);
+        $stmt->bindParam(':password', md5($data['password'])); // Use the incremented order value
+		$stmt->bindParam(':user_password', $data['password']);
+		$stmt->bindParam(':token', md5($data['password']));
+		$stmt->bindParam(':role', $data['role']);
+		 $stmt->bindParam(':id', $data['id']); // Use the incremented order value
+        if($stmt->execute()){	
+		
+			return $response->withJson(['message' => 'User Update successfully']);
+		}
+		else{
+			return $response->withJson(['message' => 'Error Updating Category']);
+		}
+		}
+		else{
+        // Get the last category order value
+        $getLastOrderSql = "SELECT MAX(id) AS lastOrder FROM users";
+        $stmt = $pdo->query($getLastOrderSql);
+        $lastOrder = $stmt->fetch(PDO::FETCH_ASSOC)['lastOrder'];
+
+        // Increment the last order value by 1
+        $newOrder = $lastOrder + 1;
+		$activ='1';
+        // Insert the new category into the database with the incremented order
+        $sql = "INSERT INTO users (userid,username,password,user_password,token,role) VALUES (:userid, :username,:password, :user_password,:token,:role)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':userid', $newOrder);
+        $stmt->bindParam(':username',$data['username']); // Use the incremented order value
+		 $stmt->bindParam(':password', md5($data['password'])); // Use the incremented order value
+		$stmt->bindParam(':user_password', $data['password']);
+		$stmt->bindParam(':token', md5($data['password']));
+		$stmt->bindParam(':role', $data['role']);
+        $stmt->execute();
+
+        return $response->withJson(['message' => 'User added successfully']);
+		}
+    } catch (PDOException $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    } catch (Exception $e) {
+        return $response->withJson(['error' => true, 'message' => $e->getMessage()], 500);
+    }
+});
+function generateReceiptText($receiptData, $type, $db)
+{
+     $query = "SELECT * FROM settings";
+    $stmt = $db->query($query);
+    $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+    $footer = '';
+    if ($type == "Product") {
+        $footer = $settings['salefooter'];
+    }
+    if ($type == "Service") {
+        $footer = $settings['repairfooter'];
+    }
+    if ($type == "Phone") {
+        $footer = $settings['phonefooter'];
+    }
+
+    // Create an array to store the formatted item lines
+    $formattedItems = [];
+
+    foreach ($receiptData['items'] as $item) {
+        $formattedItems[] = new item($item['quantity'] . ' ' . $item['product_name'], $item['line_total']);
+    }
+
+    $text = '';
+    $text .= $receiptData['order_id'] . "\n";
+    $text .= $settings['storename'] . "\n";
+    $text .= $settings['address'] . ' • ' . $settings['city'] . ' • ' . $settings['state'] . ' • ' . $settings['postalcode'] . "\n";
+    $text .= $settings['phone'] . "\n";
+
+    foreach ($formattedItems as $formattedItem) {
+        $text .= $formattedItem;
+    }
+
+    $text .= $receiptData['order_date'] . "\n";
+    $text .= "SUB-TOT: " . $receiptData['subtotal_amount'] . "\n";
+    $text .= "REMARK: \n";
+    $text .= "HST: " . $receiptData['tax_amount'] . "\n";
+    $text .= "TOTAL: " . $receiptData['total_amount'] . "\n";
+    $text .= "TOTAL DUE: " . $receiptData['due_amount'] . "\n";
+    $text .= "CASH: " . $receiptData['cash_payment'] . "\n";
+    $text .= "Debit: " . $receiptData['card_payment'] . "\n";
+    $text .= "CHANGE: " . $receiptData['change_amount'] . "\n";
+    $text .= $receiptData['order_status'] . "\n";
+    $text .= $footer . "\n";
+
+
+
+$printerName = 'Receipt'; // Replace with the actual local port name of your USB printer
+$connector = new WindowsPrintConnector("Receipt");  
+$printer = new Printer($connector);
+
+	$printer->text($text);
+
+        // Cut the receipt (if your printer supports it)
+        $printer->cut();
+
+        $printer->close();
+}
 $app->post('/addrewards', function ($request, $response, $args) {
     try {
         $pdo = $this->db; // Assuming you've set up your database connection
@@ -2617,6 +2918,11 @@ $result = $stmt->fetch();
 });
 // Delete a category
 // Delete a category
+
+
+
+
+
 $app->post('/superdeletecategories/{id}', function (Request $request, Response $response, array $args) {
     $categoryId = $args['id'];
 
